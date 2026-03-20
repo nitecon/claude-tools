@@ -90,9 +90,10 @@ pub fn project_summary(indexer: &FileIndexer) -> Result<ProjectSummary> {
 
     let total_files = indexer.file_count()?;
 
-    let total_size: i64 = conn.query_row("SELECT COALESCE(SUM(size), 0) FROM files", [], |row| {
-        row.get(0)
-    })?;
+    let total_size: i64 =
+        conn.query_row("SELECT COALESCE(SUM(size), 0) FROM files", [], |row| {
+            row.get(0)
+        })?;
 
     // Language breakdown by extension
     let mut stmt = conn.prepare(

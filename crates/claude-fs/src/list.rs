@@ -19,19 +19,10 @@ pub enum EntryType {
     Symlink,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ListOptions {
     pub show_sizes: bool,
     pub show_hidden: bool,
-}
-
-impl Default for ListOptions {
-    fn default() -> Self {
-        Self {
-            show_sizes: false,
-            show_hidden: false,
-        }
-    }
 }
 
 /// List directory contents with minimal output.

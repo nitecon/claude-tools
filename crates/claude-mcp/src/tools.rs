@@ -25,10 +25,7 @@ fn tool_tree(args: Value) -> Result<Value> {
         .unwrap_or_else(|| PathBuf::from("."));
 
     let depth = args.get("depth").and_then(|v| v.as_u64()).unwrap_or(3) as usize;
-    let max_files = args
-        .get("max_files")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(20) as usize;
+    let max_files = args.get("max_files").and_then(|v| v.as_u64()).unwrap_or(20) as usize;
 
     let options = claude_fs::tree::TreeOptions {
         max_depth: depth,
@@ -268,9 +265,8 @@ fn tool_find_files(args: Value) -> Result<Value> {
     let root = std::env::current_dir()?;
     let indexer = claude_search::indexer::FileIndexer::open_for_project(&root)?;
 
-    let results = claude_search::query::find_files(
-        &indexer, pattern, extension, min_size, max_size, limit,
-    )?;
+    let results =
+        claude_search::query::find_files(&indexer, pattern, extension, min_size, max_size, limit)?;
 
     if results.is_empty() {
         return Ok(mcp_text_content("No files found"));

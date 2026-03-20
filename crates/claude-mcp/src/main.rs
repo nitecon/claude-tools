@@ -28,11 +28,7 @@ async fn main() -> Result<()> {
 
         let response = match serde_json::from_str::<JsonRpcRequest>(trimmed) {
             Ok(request) => handle_request(request).await,
-            Err(e) => JsonRpcResponse::error(
-                Value::Null,
-                -32700,
-                format!("Parse error: {e}"),
-            ),
+            Err(e) => JsonRpcResponse::error(Value::Null, -32700, format!("Parse error: {e}")),
         };
 
         let response_json = serde_json::to_string(&response)?;
@@ -51,13 +47,15 @@ async fn handle_request(request: JsonRpcRequest) -> JsonRpcResponse {
         "initialize" => protocol::handle_initialize(id),
         "tools/list" => protocol::handle_tools_list(id),
         "tools/call" => {
-            let tool_name = request.params
+            let tool_name = request
+                .params
                 .as_ref()
                 .and_then(|p| p.get("name"))
                 .and_then(|n| n.as_str())
                 .unwrap_or("");
 
-            let arguments = request.params
+            let arguments = request
+                .params
                 .as_ref()
                 .and_then(|p| p.get("arguments"))
                 .cloned()
@@ -72,10 +70,6 @@ async fn handle_request(request: JsonRpcRequest) -> JsonRpcResponse {
             // Notifications don't need responses, but we'll return success if ID present
             JsonRpcResponse::success(id, Value::Object(serde_json::Map::new()))
         }
-        _ => JsonRpcResponse::error(
-            id,
-            -32601,
-            format!("Method not found: {}", request.method),
-        ),
+        _ => JsonRpcResponse::error(id, -32601, format!("Method not found: {}", request.method)),
     }
 }

@@ -123,9 +123,7 @@ impl SymbolIndex {
                 Ok(m) => m,
                 Err(_) => continue,
             };
-            let mtime = metadata
-                .modified()
-                .unwrap_or(SystemTime::UNIX_EPOCH);
+            let mtime = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
             let duration = mtime
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap_or_default();
@@ -136,9 +134,9 @@ impl SymbolIndex {
 
             // Check existing mtime
             let needs_update: bool = {
-                let mut stmt = self.conn.prepare_cached(
-                    "SELECT mtime_secs, mtime_nanos FROM files WHERE path = ?1",
-                )?;
+                let mut stmt = self
+                    .conn
+                    .prepare_cached("SELECT mtime_secs, mtime_nanos FROM files WHERE path = ?1")?;
                 match stmt.query_row(params![path_str.as_ref()], |row| {
                     Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
                 }) {
@@ -191,10 +189,8 @@ impl SymbolIndex {
         )?;
 
         // Clear old symbols for this file
-        self.conn.execute(
-            "DELETE FROM symbols WHERE file_id = ?1",
-            params![file_id],
-        )?;
+        self.conn
+            .execute("DELETE FROM symbols WHERE file_id = ?1", params![file_id])?;
 
         // Insert new symbols
         let mut stmt = self.conn.prepare_cached(

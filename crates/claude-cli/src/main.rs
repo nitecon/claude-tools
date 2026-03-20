@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 #[command(name = "claude-tools", about = "Token-efficient tools for Claude Code")]
@@ -245,7 +245,7 @@ fn cmd_symbol(name: &str, file: Option<PathBuf>, kind: Option<String>) -> Result
     Ok(())
 }
 
-fn cmd_symbols(file: &PathBuf, kind: Option<String>) -> Result<()> {
+fn cmd_symbols(file: &Path, kind: Option<String>) -> Result<()> {
     let mut parser = claude_symbols::SymbolParser::new();
     let symbols = parser.parse_file(file)?;
 
@@ -321,7 +321,8 @@ fn cmd_search(query: &str, search_type: &str, file: Option<String>, limit: usize
 }
 
 fn cmd_index(path: Option<PathBuf>, rebuild: bool) -> Result<()> {
-    let root = path.unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+    let root =
+        path.unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
     if rebuild {
         let cache_dir = root.join(".claude-tools");
@@ -350,7 +351,8 @@ fn cmd_index(path: Option<PathBuf>, rebuild: bool) -> Result<()> {
 }
 
 fn cmd_summary(path: Option<PathBuf>) -> Result<()> {
-    let root = path.unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+    let root =
+        path.unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
     // Ensure index exists
     let indexer = claude_search::indexer::FileIndexer::open_for_project(&root)?;

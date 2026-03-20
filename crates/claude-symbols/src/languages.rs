@@ -16,10 +16,7 @@ pub enum Language {
 impl Language {
     /// Detect language from file extension.
     pub fn from_path(path: &Path) -> Result<Self, ToolError> {
-        let ext = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("");
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
         match ext {
             "cpp" | "cc" | "cxx" | "c" | "h" | "hpp" | "hxx" | "hh" => Ok(Language::Cpp),
@@ -112,10 +109,17 @@ impl Language {
     /// Get the node type names that represent identifiers/names for this language.
     pub fn name_node_kinds(&self) -> &'static [&'static str] {
         match self {
-            Language::Cpp => &["identifier", "field_identifier", "type_identifier", "namespace_identifier"],
+            Language::Cpp => &[
+                "identifier",
+                "field_identifier",
+                "type_identifier",
+                "namespace_identifier",
+            ],
             Language::Rust => &["identifier", "type_identifier"],
             Language::Python => &["identifier"],
-            Language::TypeScript | Language::JavaScript => &["identifier", "property_identifier", "type_identifier"],
+            Language::TypeScript | Language::JavaScript => {
+                &["identifier", "property_identifier", "type_identifier"]
+            }
             Language::CSharp => &["identifier"],
             Language::Go => &["identifier", "type_identifier", "field_identifier"],
         }

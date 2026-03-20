@@ -81,10 +81,7 @@ pub fn tree(root: &Path, options: &TreeOptions) -> Result<TreeEntry> {
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();
 
-        dir_tree
-            .entry(parent_key)
-            .or_default()
-            .push((name, is_dir));
+        dir_tree.entry(parent_key).or_default().push((name, is_dir));
     }
 
     let children = build_tree_children("", &dir_tree, options.max_files_per_dir);

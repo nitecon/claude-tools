@@ -7,11 +7,17 @@ pub struct SymbolParser {
     parser: tree_sitter::Parser,
 }
 
-impl SymbolParser {
-    pub fn new() -> Self {
+impl Default for SymbolParser {
+    fn default() -> Self {
         Self {
             parser: tree_sitter::Parser::new(),
         }
+    }
+}
+
+impl SymbolParser {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Parse a file and extract all symbols.
@@ -40,10 +46,7 @@ impl SymbolParser {
             .with_context(|| "Failed to parse source code")?;
 
         Ok(extract_symbols_from_tree(
-            &tree,
-            source,
-            language,
-            file_path,
+            &tree, source, language, file_path,
         ))
     }
 

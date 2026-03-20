@@ -158,9 +158,7 @@ fn find_name(node: tree_sitter::Node, source: &str, language: &Language) -> Opti
 
     // For some node types, look for specific child field names first
     if let Some(name_node) = node.child_by_field_name("name") {
-        let text = name_node
-            .utf8_text(source.as_bytes())
-            .ok()?;
+        let text = name_node.utf8_text(source.as_bytes()).ok()?;
         return Some(text.to_string());
     }
 
@@ -213,13 +211,19 @@ fn find_name_in_declarator(
     }
 
     if name_kinds.contains(&node.kind()) {
-        return node.utf8_text(source.as_bytes()).ok().map(|s| s.to_string());
+        return node
+            .utf8_text(source.as_bytes())
+            .ok()
+            .map(|s| s.to_string());
     }
 
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         if name_kinds.contains(&child.kind()) {
-            return child.utf8_text(source.as_bytes()).ok().map(|s| s.to_string());
+            return child
+                .utf8_text(source.as_bytes())
+                .ok()
+                .map(|s| s.to_string());
         }
         if child.kind().contains("declarator") {
             if let Some(name) = find_name_in_declarator(child, source, name_kinds) {

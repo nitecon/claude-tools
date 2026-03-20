@@ -109,7 +109,9 @@ impl FileIndexer {
             };
 
             let mtime = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
-            let duration = mtime.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default();
+            let duration = mtime
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or_default();
             let mtime_secs = duration.as_secs() as i64;
             let size = metadata.len();
 
@@ -122,9 +124,9 @@ impl FileIndexer {
 
             // Check if already indexed and unchanged
             let needs_update: bool = {
-                let mut stmt = self.conn.prepare_cached(
-                    "SELECT mtime_secs, size FROM files WHERE path = ?1",
-                )?;
+                let mut stmt = self
+                    .conn
+                    .prepare_cached("SELECT mtime_secs, size FROM files WHERE path = ?1")?;
                 match stmt.query_row(params![path_str.as_ref()], |row| {
                     Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
                 }) {
