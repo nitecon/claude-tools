@@ -58,6 +58,8 @@ jobs:
 
       - name: Build release binaries
         run: cargo build --workspace --release --target ${{ matrix.target }}
+        env:
+          CLAUDE_TOOLS_VERSION: ${{ github.ref_name }}
 
       - name: Package (Unix)
         if: matrix.archive == 'tar.gz'

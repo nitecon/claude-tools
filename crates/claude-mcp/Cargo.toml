@@ -16,3 +16,12 @@ tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
+reqwest = { workspace = true }
+semver = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+flate2 = { workspace = true }
+tar = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+zip = { workspace = true }

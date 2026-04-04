@@ -56,7 +56,7 @@ pub fn handle_initialize(id: Value) -> JsonRpcResponse {
             },
             "serverInfo": {
                 "name": "claude-tools",
-                "version": env!("CARGO_PKG_VERSION")
+                "version": env!("CLAUDE_TOOLS_VERSION")
             }
         }),
     )

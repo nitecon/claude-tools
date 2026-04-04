@@ -4,11 +4,15 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 mod protocol;
 mod tools;
+mod updater;
 
 use protocol::{JsonRpcRequest, JsonRpcResponse};
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    updater::cleanup_old_binaries();
+    updater::spawn_update_check();
+
     let stdin = tokio::io::stdin();
     let mut stdout = tokio::io::stdout();
     let mut reader = BufReader::new(stdin);
