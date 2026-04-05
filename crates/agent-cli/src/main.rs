@@ -5,7 +5,10 @@ use std::path::{Path, PathBuf};
 mod updater;
 
 #[derive(Parser)]
-#[command(name = "agent-tools", about = "Token-efficient tools for AI coding agents")]
+#[command(
+    name = "agent-tools",
+    about = "Token-efficient tools for AI coding agents"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,

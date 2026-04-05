@@ -34,9 +34,6 @@ jobs:
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
             archive: zip
-          - target: aarch64-pc-windows-msvc
-            runner: windows-latest-arm
-            archive: zip
 
     steps:
       - uses: actions/checkout@v6

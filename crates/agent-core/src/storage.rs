@@ -228,12 +228,11 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn test_user_dir_overrides_global() {
-        // If ~/.agent-tools/<hash> exists, it should be returned even if global exists
+        // On Unix, user (~/.agent-tools) and global (/opt/agentic/tools) are distinct
         let user = user_tools_dir();
         let global = global_tools_dir();
-        // These are different base directories (unless on Windows where global == user-based)
-        #[cfg(unix)]
         assert_ne!(user, global);
     }
 
