@@ -79,7 +79,8 @@ Commands:
   mv        Move a file or directory
   mkdir     Create directories recursively
   rm        Remove a file or directory
-  init      Configure gateway connection (~/.agentic/config.toml)
+  setup     Setup and configuration commands
+  init      Configure gateway connection (alias for `setup gateway`)
   update    Check for updates and install the latest version
   version   Print version information
 ```
@@ -236,8 +237,14 @@ Prefer symbol-level tools over raw file reads whenever possible.
 If your AI agent supports MCP, you can also register agent-tools as an MCP stdio server:
 
 ```bash
+# Code tools only (no gateway needed)
 claude mcp add -s user agent-tools -- /opt/agentic/bin/agent-tools-mcp
+
+# Code tools + communication tools (requires gateway)
+claude mcp add -s user agent-tools -- /opt/agentic/bin/agent-tools-mcp --url https://your-gateway-host:7913
 ```
+
+The `--url` flag connects the MCP server to your [agent-gateway](#gateway-integration) instance, enabling the communication tools (`set_identity`, `send_message`, `get_messages`, `confirm_read`). Without it, only the code exploration tools are available.
 
 Once registered, the following MCP tools become available:
 
@@ -278,16 +285,15 @@ The MCP server includes 4 communication tools (`set_identity`, `send_message`, `
 
    ```bash
    # Interactive setup — prompts for gateway URL, API key, etc.
-   agent-tools init
+   agent-tools setup gateway
    ```
 
-   This writes `~/.agentic/config.toml`:
+   This writes `~/.agentic/agent-tools/gateway.conf`:
 
-   ```toml
-   [gateway]
-   url = "http://your-gateway-host:7913"
-   api_key = "your-shared-secret"
-   timeout_ms = 5000
+   ```
+   GATEWAY_URL=http://your-gateway-host:7913
+   GATEWAY_API_KEY=your-shared-secret
+   GATEWAY_TIMEOUT_MS=5000
    ```
 
    You can also set these via environment variables (`GATEWAY_URL`, `GATEWAY_API_KEY`) or CLI flags.
@@ -302,8 +308,8 @@ Config is resolved in this order (highest priority wins):
 |----------|--------|
 | 1 (highest) | CLI flags (`--url`, `--api-key`) |
 | 2 | Environment variables (`GATEWAY_URL`, `GATEWAY_API_KEY`) |
-| 3 | User config (`~/.agentic/config.toml`) |
-| 4 | Global config (`/opt/agentic/agent-tools/config.toml`) |
+| 3 | User config (`~/.agentic/agent-tools/gateway.conf`) |
+| 4 | Global config (`/opt/agentic/agent-tools/gateway.conf`) |
 
 ### Syncing skills, commands, and agents
 
