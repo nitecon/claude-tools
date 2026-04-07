@@ -1,14 +1,12 @@
 //! Unified configuration system for agent-tools.
 //!
-//! Config is loaded from a four-layer hierarchy (lowest to highest priority):
+//! Config is loaded from a three-layer hierarchy (lowest to highest priority):
 //!
-//! 1. `/opt/agentic/agent-tools/config.toml` -- system-wide global
-//! 2. `~/.agentic/config.toml` -- per-user override
-//! 3. `~/.claude/agent-comms.conf` -- legacy KEY=VALUE fallback (via dotenvy)
-//! 4. Environment variables (`GATEWAY_URL`, `GATEWAY_API_KEY`, etc.)
+//! 1. `/opt/agentic/agent-tools/gateway.conf` -- system-wide global (KEY=VALUE)
+//! 2. `~/.agentic/agent-tools/gateway.conf` -- per-user override (KEY=VALUE)
+//! 3. Environment variables (`GATEWAY_URL`, `GATEWAY_API_KEY`, etc.)
 
 use anyhow::{Context, Result};
-use serde::Deserialize;
 use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
@@ -16,15 +14,13 @@ use std::path::PathBuf;
 // -- Public types -------------------------------------------------------------
 
 /// Top-level configuration container.
-#[derive(Debug, Default, Clone, Deserialize)]
-#[serde(default)]
+#[derive(Debug, Default, Clone)]
 pub struct Config {
     pub gateway: GatewayConfig,
 }
 
 /// Gateway connection settings.
-#[derive(Debug, Default, Clone, Deserialize)]
-#[serde(default)]
+#[derive(Debug, Default, Clone)]
 pub struct GatewayConfig {
     pub url: Option<String>,
     pub api_key: Option<String>,
@@ -48,19 +44,17 @@ pub fn home_dir() -> PathBuf {
     panic!("neither HOME nor USERPROFILE is set");
 }
 
-/// Path to the per-user config file: `~/.agentic/config.toml`.
-pub fn user_config_path() -> PathBuf {
-    home_dir().join(".agentic").join("config.toml")
+/// Path to the per-user gateway config: `~/.agentic/agent-tools/gateway.conf`.
+pub fn user_gateway_conf_path() -> PathBuf {
+    home_dir()
+        .join(".agentic")
+        .join("agent-tools")
+        .join("gateway.conf")
 }
 
-/// Path to the system-wide config file: `/opt/agentic/agent-tools/config.toml`.
-pub fn global_config_path() -> PathBuf {
-    PathBuf::from("/opt/agentic/agent-tools/config.toml")
-}
-
-/// Path to the legacy config file: `~/.claude/agent-comms.conf`.
-fn legacy_config_path() -> PathBuf {
-    home_dir().join(".claude").join("agent-comms.conf")
+/// Path to the system-wide gateway config: `/opt/agentic/agent-tools/gateway.conf`.
+pub fn global_gateway_conf_path() -> PathBuf {
+    PathBuf::from("/opt/agentic/agent-tools/gateway.conf")
 }
 
 // -- Config loading -----------------------------------------------------------
@@ -68,101 +62,44 @@ fn legacy_config_path() -> PathBuf {
 /// Load configuration from all layers and return the merged result.
 ///
 /// Resolution order (later wins):
-/// 1. Global TOML (`/opt/agentic/agent-tools/config.toml`)
-/// 2. User TOML (`~/.agentic/config.toml`)
-/// 3. Legacy KEY=VALUE (`~/.claude/agent-comms.conf`) -- fills unset fields only
-/// 4. Environment variables -- override everything
+/// 1. Global gateway.conf (`/opt/agentic/agent-tools/gateway.conf`)
+/// 2. User gateway.conf (`~/.agentic/agent-tools/gateway.conf`)
+/// 3. Environment variables -- override everything
 pub fn load_config() -> Config {
     let mut cfg = Config::default();
 
-    // Layer 1: system-wide global
-    if let Some(parsed) = load_toml_file(&global_config_path()) {
-        cfg = parsed;
+    // Layer 1: system-wide global gateway.conf
+    if let Some(pairs) = read_key_value_file(&global_gateway_conf_path()) {
+        apply_key_value_pairs(&mut cfg, &pairs);
     }
 
-    // Layer 2: per-user override (overlay on top of global)
-    if let Some(user) = load_toml_file(&user_config_path()) {
-        overlay_config(&mut cfg, &user);
+    // Layer 2: per-user override gateway.conf (overwrites any global values)
+    if let Some(pairs) = read_key_value_file(&user_gateway_conf_path()) {
+        apply_key_value_pairs(&mut cfg, &pairs);
     }
 
-    // Layer 3: legacy fallback -- only fills fields that are still None
-    apply_legacy_fallback(&mut cfg);
-
-    // Layer 4: environment variables (highest priority)
+    // Layer 3: environment variables (highest priority)
     apply_env_overrides(&mut cfg);
 
     cfg
 }
 
-/// Attempt to read and parse a TOML config file. Returns `None` if the file
-/// does not exist or cannot be parsed (a warning is printed to stderr on parse
-/// failure).
-fn load_toml_file(path: &PathBuf) -> Option<Config> {
-    let content = match std::fs::read_to_string(path) {
-        Ok(c) => c,
-        Err(_) => return None,
-    };
-    match toml::from_str::<Config>(&content) {
-        Ok(c) => Some(c),
-        Err(e) => {
-            eprintln!(
-                "[agent-tools] warning: failed to parse {}: {e}",
-                path.display()
-            );
-            None
+/// Apply values from a KEY=VALUE map onto the config. Any key present in the
+/// map overwrites the corresponding config field.
+fn apply_key_value_pairs(cfg: &mut Config, pairs: &HashMap<String, String>) {
+    if let Some(v) = pairs.get("GATEWAY_URL") {
+        cfg.gateway.url = Some(v.clone());
+    }
+    if let Some(v) = pairs.get("GATEWAY_API_KEY") {
+        cfg.gateway.api_key = Some(v.clone());
+    }
+    if let Some(v) = pairs.get("GATEWAY_TIMEOUT_MS") {
+        if let Ok(ms) = v.parse::<u64>() {
+            cfg.gateway.timeout_ms = Some(ms);
         }
     }
-}
-
-/// Overlay `src` onto `dst`: any `Some` value in `src` replaces the
-/// corresponding value in `dst`.
-fn overlay_config(dst: &mut Config, src: &Config) {
-    if src.gateway.url.is_some() {
-        dst.gateway.url.clone_from(&src.gateway.url);
-    }
-    if src.gateway.api_key.is_some() {
-        dst.gateway.api_key.clone_from(&src.gateway.api_key);
-    }
-    if src.gateway.timeout_ms.is_some() {
-        dst.gateway.timeout_ms = src.gateway.timeout_ms;
-    }
-    if src.gateway.default_project.is_some() {
-        dst.gateway
-            .default_project
-            .clone_from(&src.gateway.default_project);
-    }
-}
-
-/// Read the legacy `~/.claude/agent-comms.conf` KEY=VALUE file and fill any
-/// config fields that are still `None`.
-fn apply_legacy_fallback(cfg: &mut Config) {
-    let path = legacy_config_path();
-    let pairs = match read_key_value_file(&path) {
-        Some(p) => p,
-        None => return,
-    };
-
-    if cfg.gateway.url.is_none() {
-        if let Some(v) = pairs.get("GATEWAY_URL") {
-            cfg.gateway.url = Some(v.clone());
-        }
-    }
-    if cfg.gateway.api_key.is_none() {
-        if let Some(v) = pairs.get("GATEWAY_API_KEY") {
-            cfg.gateway.api_key = Some(v.clone());
-        }
-    }
-    if cfg.gateway.timeout_ms.is_none() {
-        if let Some(v) = pairs.get("GATEWAY_TIMEOUT_MS") {
-            if let Ok(ms) = v.parse::<u64>() {
-                cfg.gateway.timeout_ms = Some(ms);
-            }
-        }
-    }
-    if cfg.gateway.default_project.is_none() {
-        if let Some(v) = pairs.get("DEFAULT_PROJECT_IDENT") {
-            cfg.gateway.default_project = Some(v.clone());
-        }
+    if let Some(v) = pairs.get("DEFAULT_PROJECT_IDENT") {
+        cfg.gateway.default_project = Some(v.clone());
     }
 }
 
@@ -203,77 +140,17 @@ fn read_key_value_file(path: &PathBuf) -> Option<HashMap<String, String>> {
     Some(map)
 }
 
-// -- Migration ----------------------------------------------------------------
+// -- Interactive setup --------------------------------------------------------
 
-/// Migrate the legacy `~/.claude/agent-comms.conf` to `~/.agentic/config.toml`.
+/// Run an interactive setup wizard that writes `~/.agentic/agent-tools/gateway.conf`.
 ///
-/// The migration only runs when the legacy file exists AND the user config file
-/// does **not** yet exist, preventing accidental overwrites.
-pub fn migrate_legacy_config() {
-    let legacy = legacy_config_path();
-    let user = user_config_path();
-
-    if !legacy.exists() || user.exists() {
-        return;
-    }
-
-    let pairs = match read_key_value_file(&legacy) {
-        Some(p) => p,
-        None => return,
-    };
-
-    let url = pairs.get("GATEWAY_URL").cloned().unwrap_or_default();
-    let api_key = pairs.get("GATEWAY_API_KEY").cloned().unwrap_or_default();
-    let timeout: u64 = pairs
-        .get("GATEWAY_TIMEOUT_MS")
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(5000);
-    let project = pairs.get("DEFAULT_PROJECT_IDENT").cloned();
-
-    let mut toml_content = String::from("[gateway]\n");
-    if !url.is_empty() {
-        toml_content.push_str(&format!("url = \"{url}\"\n"));
-    }
-    if !api_key.is_empty() {
-        toml_content.push_str(&format!("api_key = \"{api_key}\"\n"));
-    }
-    toml_content.push_str(&format!("timeout_ms = {timeout}\n"));
-    if let Some(ref p) = project {
-        if !p.is_empty() {
-            toml_content.push_str(&format!("default_project = \"{p}\"\n"));
-        }
-    }
-
-    if let Some(parent) = user.parent() {
-        if let Err(e) = std::fs::create_dir_all(parent) {
-            eprintln!("[agent-tools] failed to create {}: {e}", parent.display());
-            return;
-        }
-    }
-
-    match std::fs::write(&user, &toml_content) {
-        Ok(()) => {
-            eprintln!(
-                "[agent-tools] Migrated config from ~/.claude/agent-comms.conf to ~/.agentic/config.toml"
-            );
-        }
-        Err(e) => {
-            eprintln!("[agent-tools] failed to write {}: {e}", user.display());
-        }
-    }
-}
-
-// -- Interactive init ---------------------------------------------------------
-
-/// Run an interactive setup wizard that writes `~/.agentic/config.toml`.
-///
-/// Prompts the user for gateway URL, API key, default project, and timeout,
-/// then writes the resulting TOML file.
+/// Prompts the user for gateway URL, API key, and timeout, then writes the
+/// resulting KEY=VALUE file.
 ///
 /// # Errors
 /// Returns an error if stdin/stdout interaction fails or the config file cannot
 /// be written.
-pub fn run_init() -> Result<()> {
+pub fn run_setup_gateway() -> Result<()> {
     let stdin = io::stdin();
     let stdout = io::stdout();
     let mut out = stdout.lock();
@@ -299,16 +176,6 @@ pub fn run_init() -> Result<()> {
     }
     let api_key = api_key.trim();
 
-    // Default project (optional)
-    write!(
-        out,
-        "Default project ident (optional, press Enter to skip): "
-    )?;
-    out.flush()?;
-    let mut project_input = String::new();
-    reader.read_line(&mut project_input)?;
-    let project = project_input.trim();
-
     // Timeout
     write!(out, "Request timeout in ms [5000]: ")?;
     out.flush()?;
@@ -316,26 +183,23 @@ pub fn run_init() -> Result<()> {
     reader.read_line(&mut timeout_input)?;
     let timeout: u64 = timeout_input.trim().parse().unwrap_or(5000);
 
-    // Build TOML content
-    let mut toml_content = String::from("[gateway]\n");
-    toml_content.push_str(&format!("url = \"{url}\"\n"));
-    toml_content.push_str(&format!("api_key = \"{api_key}\"\n"));
-    toml_content.push_str(&format!("timeout_ms = {timeout}\n"));
-    if !project.is_empty() {
-        toml_content.push_str(&format!("default_project = \"{project}\"\n"));
-    }
+    // Build KEY=VALUE content
+    let mut content = String::new();
+    content.push_str(&format!("GATEWAY_URL={url}\n"));
+    content.push_str(&format!("GATEWAY_API_KEY={api_key}\n"));
+    content.push_str(&format!("GATEWAY_TIMEOUT_MS={timeout}\n"));
 
     // Write the file
-    let config_path = user_config_path();
+    let config_path = user_gateway_conf_path();
     if let Some(parent) = config_path.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("create directory {}", parent.display()))?;
     }
-    std::fs::write(&config_path, &toml_content)
+    std::fs::write(&config_path, &content)
         .with_context(|| format!("write config to {}", config_path.display()))?;
 
     writeln!(out)?;
-    writeln!(out, "Config written to {}", config_path.display())?;
+    writeln!(out, "Gateway config written to {}", config_path.display())?;
     writeln!(out)?;
     writeln!(
         out,
@@ -343,13 +207,21 @@ pub fn run_init() -> Result<()> {
     )?;
     writeln!(out, "  {{")?;
     writeln!(out, "    \"mcpServers\": {{")?;
-    writeln!(out, "      \"agent-comms\": {{")?;
-    writeln!(out, "        \"command\": \"/opt/agentic/bin/agent-mcp\"")?;
+    writeln!(out, "      \"agent-tools\": {{")?;
+    writeln!(out, "        \"command\": \"/opt/agentic/bin/agent-tools-mcp\"")?;
     writeln!(out, "      }}")?;
     writeln!(out, "    }}")?;
     writeln!(out, "  }}")?;
 
     Ok(())
+}
+
+/// Backwards-compatible alias for [`run_setup_gateway`].
+///
+/// # Errors
+/// Delegates to `run_setup_gateway`; see its documentation for error conditions.
+pub fn run_init() -> Result<()> {
+    run_setup_gateway()
 }
 
 #[cfg(test)]
@@ -365,15 +237,18 @@ mod tests {
     }
 
     #[test]
-    fn user_config_path_ends_correctly() {
-        let p = user_config_path();
-        assert!(p.ends_with(".agentic/config.toml"));
+    fn user_gateway_conf_path_ends_correctly() {
+        let p = user_gateway_conf_path();
+        assert!(p.ends_with(".agentic/agent-tools/gateway.conf"));
     }
 
     #[test]
-    fn global_config_path_is_absolute() {
-        let p = global_config_path();
-        assert_eq!(p, PathBuf::from("/opt/agentic/agent-tools/config.toml"));
+    fn global_gateway_conf_path_is_absolute() {
+        let p = global_gateway_conf_path();
+        assert_eq!(
+            p,
+            PathBuf::from("/opt/agentic/agent-tools/gateway.conf")
+        );
     }
 
     #[test]
@@ -389,8 +264,8 @@ mod tests {
     }
 
     #[test]
-    fn overlay_replaces_some_values() {
-        let mut base = Config {
+    fn apply_key_value_pairs_overwrites() {
+        let mut cfg = Config {
             gateway: GatewayConfig {
                 url: Some("http://base".into()),
                 api_key: Some("key-base".into()),
@@ -398,19 +273,14 @@ mod tests {
                 default_project: None,
             },
         };
-        let overlay = Config {
-            gateway: GatewayConfig {
-                url: Some("http://overlay".into()),
-                api_key: None,
-                timeout_ms: None,
-                default_project: Some("proj".into()),
-            },
-        };
-        overlay_config(&mut base, &overlay);
-        assert_eq!(base.gateway.url.as_deref(), Some("http://overlay"));
-        assert_eq!(base.gateway.api_key.as_deref(), Some("key-base"));
-        assert_eq!(base.gateway.timeout_ms, Some(1000));
-        assert_eq!(base.gateway.default_project.as_deref(), Some("proj"));
+        let mut pairs = HashMap::new();
+        pairs.insert("GATEWAY_URL".into(), "http://overlay".into());
+        pairs.insert("DEFAULT_PROJECT_IDENT".into(), "proj".into());
+        apply_key_value_pairs(&mut cfg, &pairs);
+        assert_eq!(cfg.gateway.url.as_deref(), Some("http://overlay"));
+        assert_eq!(cfg.gateway.api_key.as_deref(), Some("key-base"));
+        assert_eq!(cfg.gateway.timeout_ms, Some(1000));
+        assert_eq!(cfg.gateway.default_project.as_deref(), Some("proj"));
     }
 
     #[test]

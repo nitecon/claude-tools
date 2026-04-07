@@ -39,7 +39,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Interactive setup -- creates ~/.agentic/config.toml
+    /// Interactive setup -- creates ~/.agentic/agent-tools/gateway.conf
     Init,
     /// Check for a newer version and update the binary in place
     Update,
@@ -51,14 +51,13 @@ enum Command {
 async fn main() -> Result<()> {
     agent_updater::cleanup_old_binaries();
 
-    // Load config (TOML + legacy + env)
-    agent_comms::config::migrate_legacy_config();
+    // Load config (gateway.conf + env)
     let config = agent_comms::config::load_config();
 
     let cli = Cli::parse();
 
     if let Some(Command::Init) = cli.command {
-        return agent_comms::config::run_init();
+        return agent_comms::config::run_setup_gateway();
     }
     if let Some(Command::Update) = cli.command {
         return agent_updater::manual_update_blocking();
@@ -74,6 +73,7 @@ async fn main() -> Result<()> {
         .init();
 
     // Build gateway client if configured
+    let cli_url_provided = cli.url.is_some();
     let gw_url = cli.url.or(config.gateway.url);
     let gw_key = cli.api_key.or(config.gateway.api_key);
     let gw_timeout = cli.timeout_ms.or(config.gateway.timeout_ms).unwrap_or(5000);
@@ -91,12 +91,18 @@ async fn main() -> Result<()> {
         _ => None,
     };
 
+    if cli_url_provided && gateway.is_none() {
+        tracing::warn!(
+            "--url was provided but gateway client could not be created (missing --api-key?)"
+        );
+    }
+
     let server = server::AgentToolsServer::new(gateway.clone());
 
     // Auto-register default identity if configured
     let default_project = cli.default_project.or(config.gateway.default_project);
-    if let (Some(ident), Some(gw)) = (default_project, &gateway) {
-        match gw.register_project(&ident, None).await {
+    if let (Some(ident), Some(gw)) = (default_project.as_deref(), &gateway) {
+        match gw.register_project(ident, None).await {
             Ok(resp) => server.set_default_ident(resp.ident, resp.channel_name),
             Err(e) => tracing::warn!("Failed to auto-register '{ident}': {e}"),
         }

@@ -146,6 +146,17 @@ done
 
 # --- Done -------------------------------------------------------------------
 
+# --- Gateway configuration check ----------------------------------------------
+
+GATEWAY_CONF="/opt/agentic/agent-tools/gateway.conf"
+if [ ! -f "$GATEWAY_CONF" ]; then
+  echo ""
+  warn "No gateway configuration found at ${GATEWAY_CONF}"
+  echo "  To enable agent communication, run:"
+  echo "    agent-tools setup gateway"
+  echo ""
+fi
+
 echo ""
 info "Installation complete!"
 echo ""
@@ -165,7 +176,7 @@ echo "  agent-tools symbols src/main.rs"
 echo "  agent-tools search MyFunction"
 echo ""
 echo "Configure gateway connection (optional):"
-echo "  agent-tools init"
+echo "  agent-tools setup gateway"
 echo ""
 echo "Register as MCP server (includes code tools + comms):"
 echo "  claude mcp add -s user agent-tools -- ${INSTALL_DIR}/agent-tools-mcp"

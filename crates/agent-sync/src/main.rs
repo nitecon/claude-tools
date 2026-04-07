@@ -569,8 +569,7 @@ async fn cmd_sync(client: &SkillsClient, dir: PathBuf) -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Migrate any legacy config and load unified configuration.
-    agent_comms::config::migrate_legacy_config();
+    // Load unified configuration (gateway.conf + env).
     let config = agent_comms::config::load_config();
 
     let cli = Cli::parse();

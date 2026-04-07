@@ -120,7 +120,13 @@ enum Commands {
     /// Start MCP stdio server
     Serve,
 
-    /// Configure gateway connection (creates ~/.agentic/config.toml)
+    /// Setup and configuration commands
+    Setup {
+        #[command(subcommand)]
+        command: SetupCommands,
+    },
+
+    /// Configure gateway connection (alias for `setup gateway`)
     Init,
 
     /// Check for updates and install the latest version
@@ -130,6 +136,12 @@ enum Commands {
     Version,
 }
 
+#[derive(Subcommand)]
+enum SetupCommands {
+    /// Configure gateway connection (creates ~/.agentic/agent-tools/gateway.conf)
+    Gateway,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -137,7 +149,7 @@ fn main() -> Result<()> {
     // Skip for update/version/init commands to avoid double-checking or blocking interactive prompts
     if !matches!(
         cli.command,
-        Commands::Update | Commands::Version | Commands::Init
+        Commands::Update | Commands::Version | Commands::Init | Commands::Setup { .. }
     ) {
         agent_updater::auto_update_blocking();
     }
@@ -195,7 +207,11 @@ fn main() -> Result<()> {
             std::process::exit(1);
         }
 
-        Commands::Init => agent_comms::config::run_init(),
+        Commands::Setup { command } => match command {
+            SetupCommands::Gateway => agent_comms::config::run_setup_gateway(),
+        },
+
+        Commands::Init => agent_comms::config::run_setup_gateway(),
 
         Commands::Update => agent_updater::manual_update_blocking(),
 

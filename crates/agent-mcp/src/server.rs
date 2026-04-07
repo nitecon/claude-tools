@@ -150,7 +150,7 @@ pub struct AgentToolsServer {
 // ── Constant for gateway-not-configured message ──────────────────────────────
 
 const NO_GATEWAY_MSG: &str =
-    "Gateway not configured. Run 'agent-tools init' or set gateway.url in ~/.agentic/config.toml";
+    "Gateway not configured. Please ask the user to run: agent-tools setup gateway";
 
 // ── tool_router impl — all 13 tools ─────────────────────────────────────────
 
