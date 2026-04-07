@@ -161,7 +161,8 @@ async fn check_and_update(rate_limited: bool) -> Result<()> {
         return Ok(());
     }
 
-    let current = Version::parse(CURRENT_VERSION).context("invalid current version")?;
+    let current = Version::parse(CURRENT_VERSION.trim_start_matches('v'))
+        .context("invalid current version")?;
 
     let client = build_client()?;
     let release = fetch_latest_release(&client).await?;
@@ -186,7 +187,8 @@ async fn check_and_update(rate_limited: bool) -> Result<()> {
 
 /// Manual update — no rate limiting, prints version info and status to stderr.
 async fn do_manual_update() -> Result<()> {
-    let current = Version::parse(CURRENT_VERSION).context("invalid current version")?;
+    let current = Version::parse(CURRENT_VERSION.trim_start_matches('v'))
+        .context("invalid current version")?;
     eprintln!("[agent-tools] current version: v{current}");
 
     let client = build_client()?;
@@ -477,8 +479,9 @@ mod tests {
 
     #[test]
     fn test_current_version_parses() {
-        // Validates that the compile-time CURRENT_VERSION constant is valid semver.
-        let v = Version::parse(super::CURRENT_VERSION);
+        // Validates that the compile-time CURRENT_VERSION constant is valid semver
+        // (with optional 'v' prefix stripped).
+        let v = Version::parse(super::CURRENT_VERSION.trim_start_matches('v'));
         assert!(
             v.is_ok(),
             "CURRENT_VERSION '{}' is not valid semver",
