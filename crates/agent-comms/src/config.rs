@@ -208,7 +208,10 @@ pub fn run_setup_gateway() -> Result<()> {
     writeln!(out, "  {{")?;
     writeln!(out, "    \"mcpServers\": {{")?;
     writeln!(out, "      \"agent-tools\": {{")?;
-    writeln!(out, "        \"command\": \"/opt/agentic/bin/agent-tools-mcp\"")?;
+    writeln!(
+        out,
+        "        \"command\": \"/opt/agentic/bin/agent-tools-mcp\""
+    )?;
     writeln!(out, "      }}")?;
     writeln!(out, "    }}")?;
     writeln!(out, "  }}")?;
@@ -245,10 +248,7 @@ mod tests {
     #[test]
     fn global_gateway_conf_path_is_absolute() {
         let p = global_gateway_conf_path();
-        assert_eq!(
-            p,
-            PathBuf::from("/opt/agentic/agent-tools/gateway.conf")
-        );
+        assert_eq!(p, PathBuf::from("/opt/agentic/agent-tools/gateway.conf"));
     }
 
     #[test]
