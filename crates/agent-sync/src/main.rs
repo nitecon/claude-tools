@@ -1,11 +1,9 @@
-mod client;
-mod zip_util;
-
 use agent_comms::config::{home_dir, Config};
 use agent_comms::sanitize::sanitize_name;
+use agent_sync::client::SyncClient;
+use agent_sync::zip_util;
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
-use client::SkillsClient;
 use std::path::PathBuf;
 
 // -- CLI ----------------------------------------------------------------------
@@ -90,13 +88,13 @@ enum ResourceAction {
 
 // -- Helpers ------------------------------------------------------------------
 
-/// Build a `SkillsClient`, falling back to config values for URL and API key.
+/// Build a `SyncClient`, falling back to config values for URL and API key.
 fn require_client(
     url: Option<String>,
     api_key: Option<String>,
     timeout_ms: u64,
     config: &Config,
-) -> Result<SkillsClient> {
+) -> Result<SyncClient> {
     let url = url
         .or_else(|| config.gateway.url.clone())
         .unwrap_or_else(|| {
@@ -109,13 +107,13 @@ fn require_client(
             eprintln!("Missing --api-key / GATEWAY_API_KEY (run `agent-comms init` to configure)");
             std::process::exit(1);
         });
-    SkillsClient::new(url, api_key, timeout_ms)
+    SyncClient::new(url, api_key, timeout_ms)
 }
 
 // -- Resource Commands --------------------------------------------------------
 
 /// Handle push for all resource types with smart file/directory detection.
-async fn cmd_resource_push(client: &SkillsClient, path: PathBuf, kind: &str) -> Result<()> {
+async fn cmd_resource_push(client: &SyncClient, path: PathBuf, kind: &str) -> Result<()> {
     let path = path.canonicalize().context("resolve path")?;
 
     if kind == "skill" {
@@ -221,7 +219,7 @@ async fn cmd_resource_push(client: &SkillsClient, path: PathBuf, kind: &str) -> 
 
 /// Pull a resource from the gateway, respecting its kind.
 async fn cmd_resource_pull(
-    client: &SkillsClient,
+    client: &SyncClient,
     name: String,
     to: PathBuf,
     kind: &str,
@@ -259,7 +257,7 @@ async fn cmd_resource_pull(
 }
 
 /// List resources on the gateway, filtered by kind.
-async fn cmd_resource_list(client: &SkillsClient, kind: &str) -> Result<()> {
+async fn cmd_resource_list(client: &SyncClient, kind: &str) -> Result<()> {
     let all = client.list().await?;
     let filtered: Vec<_> = all
         .into_iter()
@@ -293,14 +291,14 @@ async fn cmd_resource_list(client: &SkillsClient, kind: &str) -> Result<()> {
 }
 
 /// Delete a resource from the gateway.
-async fn cmd_resource_delete(client: &SkillsClient, name: String) -> Result<()> {
+async fn cmd_resource_delete(client: &SyncClient, name: String) -> Result<()> {
     client.delete(&name).await?;
     println!("Deleted '{}'", name);
     Ok(())
 }
 
 /// Dispatch a resource action to the appropriate handler.
-async fn handle_resource(action: ResourceAction, client: &SkillsClient, kind: &str) -> Result<()> {
+async fn handle_resource(action: ResourceAction, client: &SyncClient, kind: &str) -> Result<()> {
     match action {
         ResourceAction::Push { path } => cmd_resource_push(client, path, kind).await,
         ResourceAction::Pull { name, to } => cmd_resource_pull(client, name, to, kind).await,
@@ -356,7 +354,7 @@ fn resolve_agents_dir() -> PathBuf {
     primary
 }
 
-async fn cmd_sync(client: &SkillsClient, dir: PathBuf) -> Result<()> {
+async fn cmd_sync(client: &SyncClient, dir: PathBuf) -> Result<()> {
     use sha2::{Digest, Sha256};
     use std::collections::{HashMap, HashSet};
 

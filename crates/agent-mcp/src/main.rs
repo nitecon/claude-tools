@@ -1,9 +1,10 @@
 //! Entry point for the unified `agent-tools-mcp` MCP server.
 //!
 //! Merges 9 code tools (tree, list, file_ops, extract_symbol, list_symbols,
-//! search_symbols, build_index, find_files, project_summary) with 4 comms
-//! tools (set_identity, send_message, get_messages, confirm_read) into a
-//! single rmcp-based server served over stdio.
+//! search_symbols, build_index, find_files, project_summary) with 6 comms
+//! tools (set_identity, send_message, get_messages, confirm_read, reply_to,
+//! taking_action_on) and 5 sync tools into a single rmcp-based server
+//! served over stdio.
 
 mod server;
 
@@ -76,6 +77,8 @@ async fn main() -> Result<()> {
     let cli_url_provided = cli.url.is_some();
     let gw_url = cli.url.or(config.gateway.url);
     let gw_key = cli.api_key.or(config.gateway.api_key);
+    let gw_url_clone = gw_url.clone();
+    let gw_key_clone = gw_key.clone();
     let gw_timeout = cli.timeout_ms.or(config.gateway.timeout_ms).unwrap_or(5000);
 
     let gateway = match (gw_url, gw_key) {
@@ -91,13 +94,25 @@ async fn main() -> Result<()> {
         _ => None,
     };
 
+    // Build sync client using the same gateway credentials
+    let sync_client = match (gw_url_clone, gw_key_clone) {
+        (Some(url), Some(key)) => match agent_sync::client::SyncClient::new(url, key, gw_timeout) {
+            Ok(sc) => Some(sc),
+            Err(e) => {
+                tracing::warn!("Failed to create sync client: {e}");
+                None
+            }
+        },
+        _ => None,
+    };
+
     if cli_url_provided && gateway.is_none() {
         tracing::warn!(
             "--url was provided but gateway client could not be created (missing --api-key?)"
         );
     }
 
-    let server = server::AgentToolsServer::new(gateway.clone());
+    let server = server::AgentToolsServer::new(gateway.clone(), sync_client);
 
     // Auto-register default identity if configured
     let default_project = cli.default_project.or(config.gateway.default_project);

@@ -4,7 +4,7 @@ use serde::Deserialize;
 use std::time::Duration;
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct SkillMeta {
+pub struct SyncMeta {
     pub name: String,
     pub kind: String,
     pub size: i64,
@@ -27,13 +27,13 @@ pub struct DownloadResult {
     pub kind: String,
 }
 
-pub struct SkillsClient {
+pub struct SyncClient {
     base_url: String,
     api_key: String,
     client: Client,
 }
 
-impl SkillsClient {
+impl SyncClient {
     pub fn new(base_url: String, api_key: String, timeout_ms: u64) -> Result<Self> {
         let client = Client::builder()
             .timeout(Duration::from_millis(timeout_ms))
@@ -147,7 +147,7 @@ impl SkillsClient {
         Ok(DownloadResult { bytes, kind })
     }
 
-    pub async fn list(&self) -> Result<Vec<SkillMeta>> {
+    pub async fn list(&self) -> Result<Vec<SyncMeta>> {
         let url = format!("{}/v1/skills", self.base_url);
         let resp = self
             .client
@@ -159,7 +159,7 @@ impl SkillsClient {
         if !resp.status().is_success() {
             bail!("list failed: HTTP {}", resp.status());
         }
-        resp.json::<Vec<SkillMeta>>()
+        resp.json::<Vec<SyncMeta>>()
             .await
             .context("parse list response")
     }

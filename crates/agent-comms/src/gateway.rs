@@ -55,6 +55,9 @@ pub struct GatewayMessage {
     pub source: String,
     pub content: String,
     pub sent_at: i64,
+    pub parent_message_id: Option<i64>,
+    pub agent_id: Option<String>,
+    pub message_type: Option<String>,
 }
 
 /// Response envelope for the unread-messages endpoint.
@@ -68,6 +71,19 @@ pub struct GetUnreadResponse {
 #[derive(Deserialize, Debug, Clone)]
 pub struct ConfirmResponse {
     pub confirmed: bool,
+}
+
+/// Response returned after replying to or acting on a message.
+#[derive(Deserialize, Debug, Clone)]
+pub struct ReplyResponse {
+    pub message_id: i64,
+    pub external_message_id: String,
+    pub parent_message_id: i64,
+}
+
+#[derive(Serialize)]
+struct ActionRequest<'a> {
+    message: &'a str,
 }
 
 // -- Client implementation ----------------------------------------------------
@@ -96,6 +112,18 @@ impl GatewayClient {
 
     fn auth(&self) -> String {
         format!("Bearer {}", self.api_key)
+    }
+
+    /// Conditionally attach the `X-Agent-Id` header to a request builder.
+    fn add_agent_id(
+        builder: reqwest::RequestBuilder,
+        agent_id: Option<&str>,
+    ) -> reqwest::RequestBuilder {
+        if let Some(id) = agent_id {
+            builder.header("X-Agent-Id", id)
+        } else {
+            builder
+        }
     }
 
     /// Register (or re-register) a project with the gateway.
@@ -128,13 +156,22 @@ impl GatewayClient {
     }
 
     /// Post an agent message to the project's channel.
-    pub async fn send_message(&self, ident: &str, content: &str) -> Result<SendMessageResponse> {
+    ///
+    /// When `agent_id` is `Some`, the request includes an `X-Agent-Id` header so
+    /// the gateway can attribute the message to a specific agent.
+    pub async fn send_message(
+        &self,
+        ident: &str,
+        content: &str,
+        agent_id: Option<&str>,
+    ) -> Result<SendMessageResponse> {
         let url = format!("{}/v1/projects/{}/messages", self.base_url, ident);
-        let resp = self
+        let builder = self
             .client
             .post(&url)
             .header("Authorization", self.auth())
-            .json(&SendMessageRequest { content })
+            .json(&SendMessageRequest { content });
+        let resp = Self::add_agent_id(builder, agent_id)
             .send()
             .await
             .context("POST /v1/projects/:ident/messages")?;
@@ -151,12 +188,17 @@ impl GatewayClient {
     }
 
     /// Fetch unconfirmed messages for a project (peek -- no side effects).
-    pub async fn get_unread(&self, ident: &str) -> Result<GetUnreadResponse> {
+    ///
+    /// When `agent_id` is `Some`, the gateway returns only messages unconfirmed
+    /// by that specific agent rather than the global unread set.
+    pub async fn get_unread(
+        &self,
+        ident: &str,
+        agent_id: Option<&str>,
+    ) -> Result<GetUnreadResponse> {
         let url = format!("{}/v1/projects/{}/messages/unread", self.base_url, ident);
-        let resp = self
-            .client
-            .get(&url)
-            .header("Authorization", self.auth())
+        let builder = self.client.get(&url).header("Authorization", self.auth());
+        let resp = Self::add_agent_id(builder, agent_id)
             .send()
             .await
             .context("GET /v1/projects/:ident/messages/unread")?;
@@ -173,15 +215,21 @@ impl GatewayClient {
     }
 
     /// Confirm a single message as read and acted upon.
-    pub async fn confirm_read(&self, ident: &str, msg_id: i64) -> Result<ConfirmResponse> {
+    ///
+    /// When `agent_id` is `Some`, the confirmation is scoped to that agent,
+    /// leaving the message unconfirmed for other agents.
+    pub async fn confirm_read(
+        &self,
+        ident: &str,
+        msg_id: i64,
+        agent_id: Option<&str>,
+    ) -> Result<ConfirmResponse> {
         let url = format!(
             "{}/v1/projects/{}/messages/{}/confirm",
             self.base_url, ident, msg_id
         );
-        let resp = self
-            .client
-            .post(&url)
-            .header("Authorization", self.auth())
+        let builder = self.client.post(&url).header("Authorization", self.auth());
+        let resp = Self::add_agent_id(builder, agent_id)
             .send()
             .await
             .context("POST /v1/projects/:ident/messages/:id/confirm")?;
@@ -195,5 +243,79 @@ impl GatewayClient {
         resp.json::<ConfirmResponse>()
             .await
             .context("decode confirm response")
+    }
+
+    /// Reply to a specific message in a project's channel.
+    ///
+    /// Sends `content` as a threaded reply to the message identified by `msg_id`.
+    /// The gateway will attempt native threading (e.g. Discord message references)
+    /// and falls back to a plain send if the parent has no external message id.
+    pub async fn reply_to(
+        &self,
+        ident: &str,
+        msg_id: i64,
+        content: &str,
+        agent_id: Option<&str>,
+    ) -> Result<ReplyResponse> {
+        let url = format!(
+            "{}/v1/projects/{}/messages/{}/reply",
+            self.base_url, ident, msg_id
+        );
+        let builder = self
+            .client
+            .post(&url)
+            .header("Authorization", self.auth())
+            .json(&SendMessageRequest { content });
+        let resp = Self::add_agent_id(builder, agent_id)
+            .send()
+            .await
+            .context("POST /v1/projects/:ident/messages/:id/reply")?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("gateway error {status}: {body}");
+        }
+
+        resp.json::<ReplyResponse>()
+            .await
+            .context("decode reply response")
+    }
+
+    /// Signal that the agent is taking action on a message.
+    ///
+    /// Posts an action notification against `msg_id`.  The body uses the field
+    /// name `message` (not `content`) to distinguish action payloads from
+    /// regular messages and replies.
+    pub async fn taking_action_on(
+        &self,
+        ident: &str,
+        msg_id: i64,
+        message: &str,
+        agent_id: Option<&str>,
+    ) -> Result<ReplyResponse> {
+        let url = format!(
+            "{}/v1/projects/{}/messages/{}/action",
+            self.base_url, ident, msg_id
+        );
+        let builder = self
+            .client
+            .post(&url)
+            .header("Authorization", self.auth())
+            .json(&ActionRequest { message });
+        let resp = Self::add_agent_id(builder, agent_id)
+            .send()
+            .await
+            .context("POST /v1/projects/:ident/messages/:id/action")?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("gateway error {status}: {body}");
+        }
+
+        resp.json::<ReplyResponse>()
+            .await
+            .context("decode action response")
     }
 }

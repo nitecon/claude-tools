@@ -13,6 +13,7 @@ agent-fs = { path = "../agent-fs" }
 agent-symbols = { path = "../agent-symbols" }
 agent-search = { path = "../agent-search" }
 agent-comms = { path = "../agent-comms" }
+agent-sync = { path = "../agent-sync" }
 agent-updater = { path = "../agent-updater" }
 rmcp = { workspace = true }
 tokio = { workspace = true }
@@ -24,3 +25,6 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 clap = { workspace = true }
 rpassword = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+walkdir = { workspace = true }

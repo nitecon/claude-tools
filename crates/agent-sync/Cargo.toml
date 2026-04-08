@@ -3,6 +3,10 @@ name = "agent-sync"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "agent_sync"
+path = "src/lib.rs"
+
 [[bin]]
 name = "agent-sync"
 path = "src/main.rs"

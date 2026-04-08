@@ -70,17 +70,21 @@ dependencies = [
  "agent-fs",
  "agent-search",
  "agent-symbols",
+ "agent-sync",
  "agent-updater",
  "anyhow",
  "clap",
+ "hex",
  "rmcp",
  "rpassword",
  "schemars",
  "serde",
  "serde_json",
+ "sha2",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "walkdir",
 ]
 
 [[package]]
